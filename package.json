@@ -1,5 +1,5 @@
 {
-  "name": "bshelper",
+  "name": "@allesbeste/bshelper",
   "version": "1.0.0",
   "description": "BS Helper package",
   "main": "bshelper.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edreanernst/BS-Helper.git"
+    "url": "git+https://github.com/Allesbeste/BS-Helper.git"
   },
   "author": "Edrean Ernst",
   "license": "ISC",
