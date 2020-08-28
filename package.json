@@ -1,6 +1,6 @@
 {
   "name": "@allesbeste/bshelper",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "BS Helper package",
   "main": "bshelper.js",
   "scripts": {
@@ -13,14 +13,14 @@
   "author": "Edrean Ernst",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/edreanernst/BS-Helper/issues"
+    "url": "https://github.com/Allesbeste/BS-Helper/issues"
   },
-  "homepage": "https://github.com/edreanernst/BS-Helper#readme",
+  "homepage": "https://github.com/Allesbeste/BS-Helper#readme",
   "devDependencies": {
-    "aws-sdk-mock": "^5.1.0",
     "jest": "^26.4.1"
   },
   "dependencies": {
-    "aws-sdk": "^2.738.0"
+    "aws-sdk": "^2.738.0",
+    "moment": "^2.27.0"
   }
 }
