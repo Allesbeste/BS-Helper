@@ -1,0 +1,26 @@
+{
+  "name": "bshelper",
+  "version": "1.0.0",
+  "description": "BS Helper package",
+  "main": "bshelper.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edreanernst/BS-Helper.git"
+  },
+  "author": "Edrean Ernst",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/edreanernst/BS-Helper/issues"
+  },
+  "homepage": "https://github.com/edreanernst/BS-Helper#readme",
+  "devDependencies": {
+    "aws-sdk-mock": "^5.1.0",
+    "jest": "^26.4.1"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.738.0"
+  }
+}
