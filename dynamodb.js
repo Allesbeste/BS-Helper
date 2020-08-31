@@ -28,3 +28,17 @@ exports.batchGetItem = (params, callback) => {
         callback(err);
     }
 };
+
+exports.putItem = (params, callback) => {
+    try {
+        dynamodb.putItem(params, (err, data) => {
+            if (err) {
+                callback(err);
+            } else {
+                callback(null, data);
+            }
+        });
+    } catch (err) {
+        callback(err);
+    }
+};
