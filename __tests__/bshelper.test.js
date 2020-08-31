@@ -73,6 +73,11 @@ describe("Validation checks", () => {
         await expect(bshelper.IsBoerderyGeldig("qwerty", undefined)).rejects.toThrowError(bshelper.BSBoerderyUnspecified);
         await expect(bshelper.IsBoerderyGeldig("qwerty", "")).rejects.toThrowError(bshelper.BSBoerderyUnspecified);
     });
+
+    test("Bittoelatingsblok Unspecified exception thrown", async () => {
+        await expect(bshelper.IsBoerderyGeldig("qwerty", "1234", undefined)).rejects.toThrowError(bshelper.BSBittoelatingsBlokUnspecified);
+        await expect(bshelper.IsBoerderyGeldig("qwerty", "1234", "")).rejects.toThrowError(bshelper.BSBittoelatingsBlokUnspecified);
+    });
 });
 
 describe("Databases", () => {
