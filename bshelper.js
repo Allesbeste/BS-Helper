@@ -31,7 +31,7 @@ class BSHelper {
                 if (typeof bitmask === 'undefined' || bitmask === null) {
                     reject(new BSBitmaskUnspecified('Geen bitmask is gespesifiseer.'));
                 }
-    
+
                 let ddbparams = {
                     ExpressionAttributeValues: {
                         ":uid": {
@@ -103,20 +103,31 @@ class BSHelper {
             }
         });
     }
+}
 
-    LogTransaksie(boerderyuuid, path, httpMethod, gebruikernaam, hoofafdeling, afdeling, beskrywing, request, params, body, result, itemdata) {
+class Logger {
+
+    constructor(dynamodb, boerderyuuid, gebruikernaam, httpMethod, path) {
+        this.dynamodb = dynamodb;
+        this.boerderyuuid = boerderyuuid;
+        this.gebruikernaam = gebruikernaam;
+        this.httpMethod = httpMethod;
+        this.path = path;
+    }
+
+    LogTransaksie(hoofafdeling, afdeling, beskrywing, request, params, body, result, itemdata) {
         return new Promise((resolve, reject) => {
             try {
                 let ddbparams = {
                     Item: {
                         "boerderyuuid": {
-                            S: boerderyuuid.toString()
+                            S: this.boerderyuuid.toString()
                         },
                         "datumtyd": {
                             N: moment.utc().unix().toString()
                         },
                         "aksie": {
-                            S: httpMethod.toString()
+                            S: this.httpMethod.toString()
                         },
                         "hoofafdeling": {
                             S: hoofafdeling.toString()
@@ -128,16 +139,16 @@ class BSHelper {
                             S: beskrywing.toString()
                         },
                         "gebruikernaam": {
-                            S: gebruikernaam.toString()
+                            S: this.gebruikernaam.toString()
                         }
                     },
                     TableName: process.env.TransaksieLogDB
                 };
-                if (path != null) {
+                if (this.path != null) {
                     ddbparams.Item = {
                         ...ddbparams.Item,
                         "endpoint": {
-                            S: path.toString()
+                            S: this.path.toString()
                         }
                     }
                 }
@@ -197,7 +208,9 @@ class BSHelper {
         });
     }
 }
+
 exports.BSHelper = BSHelper;
+exports.Logger = Logger;
 
 exports.BSUserUnknown = BSUserUnknown;
 exports.BSBoerderyUnspecified = BSBoerderyUnspecified;
