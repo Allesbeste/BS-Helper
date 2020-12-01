@@ -31,7 +31,7 @@ class BSHelper {
                 if (typeof bitmask === 'undefined' || bitmask === null) {
                     reject(new BSBitmaskUnspecified('Geen bitmask is gespesifiseer.'));
                 }
-    
+
                 let ddbparams = {
                     ExpressionAttributeValues: {
                         ":uid": {
@@ -103,20 +103,31 @@ class BSHelper {
             }
         });
     }
+}
 
-    LogTransaksie(boerderyuuid, path, httpMethod, gebruikernaam, hoofafdeling, afdeling, beskrywing, request, params, body, result, itemdata) {
+class Logger {
+
+    constructor(dynamodb, boerderyuuid, gebruikernaam, httpMethod, path) {
+        this.dynamodb = dynamodb;
+        this.boerderyuuid = boerderyuuid;
+        this.gebruikernaam = gebruikernaam;
+        this.httpMethod = httpMethod;
+        this.path = path;
+    }
+
+    LogTransaksie(hoofafdeling, afdeling, beskrywing, request, params, body, result, itemdata) {
         return new Promise((resolve, reject) => {
             try {
                 let ddbparams = {
                     Item: {
                         "boerderyuuid": {
-                            S: boerderyuuid.toString()
+                            S: this.boerderyuuid.toString()
                         },
                         "datumtyd": {
                             N: moment.utc().unix().toString()
                         },
                         "aksie": {
-                            S: httpMethod.toString()
+                            S: this.httpMethod.toString()
                         },
                         "hoofafdeling": {
                             S: hoofafdeling.toString()
@@ -128,16 +139,16 @@ class BSHelper {
                             S: beskrywing.toString()
                         },
                         "gebruikernaam": {
-                            S: gebruikernaam.toString()
+                            S: this.gebruikernaam.toString()
                         }
                     },
                     TableName: process.env.TransaksieLogDB
                 };
-                if (path != null) {
+                if (this.path != null) {
                     ddbparams.Item = {
                         ...ddbparams.Item,
                         "endpoint": {
-                            S: path.toString()
+                            S: this.path.toString()
                         }
                     }
                 }
@@ -197,7 +208,283 @@ class BSHelper {
         });
     }
 }
+
+class DataTransformer {
+    ConvertDynamoDBData(data) {
+        return new Promise((resolve, reject) => {
+            try {
+                var results = [];
+                for (const returndata of data) {
+                    let result = {};
+                    for (let i = 0; i < Object.keys(returndata).length; i++) {
+                        let keys = returndata[Object.keys(returndata)[i]];
+                        let value = Object.values(keys)[0];
+                        if (Object.keys(keys) === "N") {
+                            value = !isNaN(value) && value.toString().indexOf(".") !== -1 ?
+                                parseFloat(value) :
+                                parseInt(value, 10);
+                        }
+                        if (Object.keys(keys) === "SS" || Object.keys(keys) === "NS") {
+                            this.ConvertDynamoDBData(value);
+                        }
+                        if (Object.keys(keys) === "L") {
+                            this.ConvertDynamoDBData(
+                                    value.map((item) => {
+                                        return { myitem: item };
+                                    })
+                                )
+                                .then((response) => {
+                                    value = response.map((item) => item.myitem);
+                                })
+                                .catch((error) => {
+                                    reject(error);
+                                });
+                        }
+                        if (Object.keys(keys) === "M") {
+                            let values = [];
+                            for (const [k, v] of Object.entries(value)) {
+                                values.push({
+                                    [k]: v
+                                });
+                            }
+                            this.ConvertDynamoDBData(values)
+                                .then((response) => {
+                                    value = response;
+                                })
+                                .catch((error) => {
+                                    reject(error);
+                                });
+                        }
+                        result[Object.keys(returndata)[i]] = value;
+                    }
+                    results.push(result);
+                }
+                resolve(results);
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    ConvertFormData(data) {
+        return new Promise((resolve, reject) => {
+            try {
+                var results = data.map((item) => {
+                    item = JSON.parse(item.S);
+                    switch (item.type) {
+                        case "input":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    placeholder: item.placeholder || ""
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "image":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    maxFiles: item.maxFiles || 1,
+                                    fileTypes: item.fileTypes
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "textarea":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    placeholder: item.placeholder
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "phone":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    // placeholder: item.placeholder,
+                                    type: "text"
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "select":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    options: item.options
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "searchselect":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    options: item.options
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "multiselect":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    options: item.options
+                                },
+                                value: item.value || [],
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "date":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    placeholder: item.placeholder,
+                                    type: "text"
+                                },
+                                value: new Date(item.value) || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "datetime":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    placeholder: item.placeholder,
+                                    type: "text"
+                                },
+                                value: new Date(item.value) || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "daterange":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {},
+                                value: item.value || [],
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                        case "checkbox":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    checked: item.value || false
+                                },
+                                value: item.value || false,
+                                valid: true,
+                                touched: true
+                            };
+                        default:
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    placeholder: item.placeholder,
+                                    type: "text"
+                                },
+                                value: "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
+                            };
+                    }
+                });
+
+                const initialValue = {};
+                var resultsNaObject = results.reduce((obj, item) => {
+                    return {
+                        ...obj,
+                        [item["name"]]: item
+                    };
+                }, initialValue);
+
+                resolve(JSON.stringify(resultsNaObject));
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+}
+
 exports.BSHelper = BSHelper;
+exports.Logger = Logger;
+exports.DataTransformer = DataTransformer;
 
 exports.BSUserUnknown = BSUserUnknown;
 exports.BSBoerderyUnspecified = BSBoerderyUnspecified;
