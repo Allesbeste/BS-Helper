@@ -214,52 +214,56 @@ class DataTransformer {
         return new Promise((resolve, reject) => {
             try {
                 var results = [];
-                for (const returndata of data) {
-                    let result = {};
-                    for (let i = 0; i < Object.keys(returndata).length; i++) {
-                        let keys = returndata[Object.keys(returndata)[i]];
-                        let value = Object.values(keys)[0];
-                        if (Object.keys(keys) === "N") {
-                            value = !isNaN(value) && value.toString().indexOf(".") !== -1 ?
-                                parseFloat(value) :
-                                parseInt(value, 10);
-                        }
-                        if (Object.keys(keys) === "SS" || Object.keys(keys) === "NS") {
-                            this.ConvertDynamoDBData(value);
-                        }
-                        if (Object.keys(keys) === "L") {
-                            this.ConvertDynamoDBData(
-                                    value.map((item) => {
-                                        return { myitem: item };
-                                    })
-                                )
-                                .then((response) => {
-                                    value = response.map((item) => item.myitem);
-                                })
-                                .catch((error) => {
-                                    reject(error);
-                                });
-                        }
-                        if (Object.keys(keys) === "M") {
-                            let values = [];
-                            for (const [k, v] of Object.entries(value)) {
-                                values.push({
-                                    [k]: v
-                                });
+                (async() => {
+                    for await (const returndata of data) {
+                        let result = {};
+                        for (const [k, v] of Object.entries(returndata)) {
+                            let key = Object.keys(v)[0];
+                            let value = Object.values(v);
+                            if (key === "N") {
+                                value = !isNaN(value[0]) && value[0].toString().indexOf(".") !== -1 ?
+                                    parseFloat(value[0]) :
+                                    parseInt(value[0], 10);
                             }
-                            this.ConvertDynamoDBData(values)
-                                .then((response) => {
-                                    value = response;
-                                })
-                                .catch((error) => {
-                                    reject(error);
-                                });
+                            if (key === "NS") {
+                                value = value[0].map(item => !isNaN(item) && item.toString().indexOf(".") !== -1 ?
+                                    parseFloat(item) :
+                                    parseInt(item, 10));
+                            }
+                            if (key === "L") {
+                                value = await this.ConvertDynamoDBData(value);
+                                let val = [];
+                                for (var i = 0; i < value.length; i++) {
+                                    val.push(Object.values(Object.values(value)[i]));
+                                }
+                                value = val[0];
+                            }
+                            if (key === "M") {
+                                let values = [];
+                                for (const [k, v] of Object.entries(value[0])) {
+                                    values.push({
+                                        [k]: v
+                                    });
+                                }
+                                value = await this.ConvertDynamoDBData(values);
+                                let val = {};
+                                for (var i = 0; i < value.length; i++) {
+                                    val[Object.keys(Object.values(value)[i])[0]] = Object.values(Object.values(value)[i])[0];
+                                }
+                                value = val;
+                            }
+                            if (key === "S" || key === "BOOL") {
+                                value = value[0];
+                            }
+                            result[k] = value;
                         }
-                        result[Object.keys(returndata)[i]] = value;
+                        results.push(result);
                     }
-                    results.push(result);
-                }
-                resolve(results);
+                    resolve(results);
+                })().catch(error => {
+                    console.error("Caught: " + error);
+                    reject(error);
+                });
             } catch (error) {
                 reject(error);
             }
