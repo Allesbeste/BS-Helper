@@ -103,6 +103,101 @@ class BSHelper {
             }
         });
     }
+
+    KryToelatings(boerderyuuid, gebruikernaam, module) {
+        return new Promise((resolve, reject) => {
+            try {
+                let ddbparams = {
+                    ExpressionAttributeValues: {
+                        ":bid": {
+                            S: boerderyuuid.toString()
+                        },
+                        ":uid": {
+                            S: gebruikernaam.toString()
+                        },
+                        ":mid": {
+                            S: module.toString()
+                        }
+                    },
+                    ExpressionAttributeNames: {
+                        "#sk": "gebruikernaam-module-weergawe",
+                        '#mid': 'module'
+                    },
+                    FilterExpression: "#mid = :mid",
+                    KeyConditionExpression: "boerderyuuid = :bid AND begins_with(#sk, :uid)",
+                    TableName: process.env.ModuleToelatingsDB,
+                    ProjectionExpression: "boerderyuuid, toelatings, weergawe"
+                };
+
+                // console.log(JSON.stringify(ddbparams));
+                this.dynamodb.query(ddbparams, (err, data) => {
+                    if (err) {
+                        console.error(err);
+                        reject(err);
+                    } else {
+                        if (data.Count > 0) {
+                            dataTransformer.ConvertDynamoDBData(data.Items).then(results => {
+                                let finalresult = results.map(item => {
+                                    let newData = {...item };
+                                    delete newData.boerderyuuid;
+                                    return newData;
+                                });
+                                let biggest = Math.max.apply(Math, finalresult.map(item => parseInt(item.weergawe, 10)));
+                                finalresult = finalresult.filter(item => parseInt(item.weergawe, 10) === biggest);
+                                resolve(finalresult[0].toelatings);
+                            }).catch(error => {
+                                console.error(error);
+                                reject(error);
+                            });
+                        } else {
+                            resolve(false);
+                        }
+                    }
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    ModuleToelatings(boerderyuuid, gebruikernaam, module, toelatingbenodig) {
+        return new Promise((resolve, reject) => {
+            try {
+                this.KryToelatings(boerderyuuid, gebruikernaam, module).then(results => {
+                    const permissionsowned = JSON.parse(results);
+                    if (permissionsowned) {
+                        let allowed = false;
+                        const permissionAfdeling = toelatingbenodig.substr(
+                            0,
+                            toelatingbenodig.indexOf(":")
+                        );
+                        const requiredPermissions = toelatingbenodig.substr(
+                            toelatingbenodig.indexOf(":") + 1,
+                            toelatingbenodig.length + 1
+                        );
+                        if (permissionsowned[permissionAfdeling][requiredPermissions] === true) {
+                            allowed = true;
+                        } else if (
+                            permissionsowned[permissionAfdeling][requiredPermissions] === false
+                        ) {
+                            allowed = false;
+                        } else {
+                            allowed = permissionsowned[permissionAfdeling][requiredPermissions];
+                        }
+
+                        resolve(allowed);
+                    } else {
+                        resolve(false);
+                    }
+                }).catch(error => {
+                    console.error(error);
+                    reject(error);
+                })
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
 }
 
 class Logger {
