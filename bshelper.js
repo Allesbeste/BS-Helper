@@ -14,6 +14,7 @@ class BSHelper {
 
     constructor(dynamodb) {
         this.dynamodb = dynamodb;
+        this.dataTransformer = new DataTransformer();
     }
 
     IsBoerderyGeldig(userid, boerderyuuid, bittoelatingsblok, bitmask) {
@@ -136,7 +137,7 @@ class BSHelper {
                         reject(err);
                     } else {
                         if (data.Count > 0) {
-                            dataTransformer.ConvertDynamoDBData(data.Items).then(results => {
+                            this.dataTransformer.ConvertDynamoDBData(data.Items).then(results => {
                                 let finalresult = results.map(item => {
                                     let newData = {...item };
                                     delete newData.boerderyuuid;
