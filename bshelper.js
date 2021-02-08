@@ -6,6 +6,8 @@ class BSUserUnknown extends Error {}
 
 class BSBoerderyUnspecified extends Error {}
 
+class BSSPUnspecified extends Error {}
+
 class BSBittoelatingsBlokUnspecified extends Error {}
 
 class BSBitmaskUnspecified extends Error {}
@@ -74,6 +76,94 @@ class BSHelper {
                                     } else {
                                         try {
                                             let toelatings = data.Responses[process.env.BoerderyRolleDB].map(rekord => {
+                                                if (rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`]) {
+                                                    return rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`].N;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            });
+                                            let bitmaskresult = toelatings.reduce(function(a, b) {
+                                                return a | b;
+                                            });
+                                            // console.log("toelatings", toelatings, "bitmask", parseInt(bitmask, 10), "bitmaskresult", bitmaskresult);
+                                            // console.log("results", ((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult))));
+                                            resolve((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult)));
+                                        } catch (error) {
+                                            reject(error);
+                                        }
+                                    }
+                                });
+                            } else {
+                                resolve(false); // Het nie toegang nie
+                            }
+                        } else {
+                            resolve(false); // Het nie toegang nie
+                        }
+                    }
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    IsSPGeldig(userid, spuuid, bittoelatingsblok, bitmask) {
+        return new Promise((resolve, reject) => {
+            try {
+                if (typeof userid === 'undefined' || !userid) {
+                    reject(new BSUserUnknown('Geen gebruiker identifikasie. Probeer weer inteken.'));
+                }
+                if (typeof spuuid === 'undefined' || !spuuid) {
+                    reject(new BSSPUnspecified('Geen diensverskaffer identifikasie gespesifiseer.'));
+                }
+                if (typeof bittoelatingsblok === 'undefined' || bittoelatingsblok === null) {
+                    reject(new BSBittoelatingsBlokUnspecified('Geen bittoelatingsblok is gespesifiseer.'));
+                }
+                if (typeof bitmask === 'undefined' || bitmask === null) {
+                    reject(new BSBitmaskUnspecified('Geen bitmask is gespesifiseer.'));
+                }
+
+                let ddbparams = {
+                    ExpressionAttributeValues: {
+                        ":uid": {
+                            S: userid.toString()
+                        },
+                        ":bid": {
+                            S: spuuid.toString()
+                        }
+                    },
+                    KeyConditionExpression: "userid = :uid AND spuuid = :bid",
+                    TableName: process.env.SPUsersDB
+                };
+                this.dynamodb.query(ddbparams, (err, data) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        if (data.Count > 0) {
+                            let rolle = data.Items[0].rolle;
+                            if (rolle["SS"].length > 0) {
+                                let queryList = [];
+                                for (let rolid of rolle["SS"]) {
+                                    if (rolid.startsWith("t")) {
+                                        queryList.push({ "spuuid": { S: "templaat" }, "rolid": { S: rolid.slice(1).toString() } });
+                                    } else {
+                                        queryList.push({ "spuuid": { S: spuuid.toString() }, "rolid": { S: rolid.toString() } });
+                                    }
+                                };
+                                var params = {
+                                    RequestItems: {
+                                        [process.env.SPRolleDB]: {
+                                            Keys: queryList,
+                                            ProjectionExpression: `bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`
+                                        }
+                                    }
+                                };
+                                this.dynamodb.batchGetItem(params, function(err, data) {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        try {
+                                            let toelatings = data.Responses[process.env.SPRolleDB].map(rekord => {
                                                 if (rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`]) {
                                                     return rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`].N;
                                                 } else {
