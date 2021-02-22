@@ -2,303 +2,15 @@
 
 var moment = require('moment');
 
-class BSUserUnknown extends Error {}
-
-class BSBoerderyUnspecified extends Error {}
-
-class BSSPUnspecified extends Error {}
-
-class BSBittoelatingsBlokUnspecified extends Error {}
-
-class BSBitmaskUnspecified extends Error {}
-
-class BSHelper {
-
-    constructor(dynamodb) {
-        this.dynamodb = dynamodb;
-        this.dataTransformer = new DataTransformer();
-    }
-
-    IsBoerderyGeldig(userid, boerderyuuid, bittoelatingsblok, bitmask) {
-        return new Promise((resolve, reject) => {
-            try {
-                if (typeof userid === 'undefined' || !userid) {
-                    reject(new BSUserUnknown('Geen gebruiker identifikasie. Probeer weer inteken.'));
-                }
-                if (typeof boerderyuuid === 'undefined' || !boerderyuuid) {
-                    reject(new BSBoerderyUnspecified('Geen boerdery identifikasie gespesifiseer.'));
-                }
-                if (typeof bittoelatingsblok === 'undefined' || bittoelatingsblok === null) {
-                    reject(new BSBittoelatingsBlokUnspecified('Geen bittoelatingsblok is gespesifiseer.'));
-                }
-                if (typeof bitmask === 'undefined' || bitmask === null) {
-                    reject(new BSBitmaskUnspecified('Geen bitmask is gespesifiseer.'));
-                }
-
-                let ddbparams = {
-                    ExpressionAttributeValues: {
-                        ":uid": {
-                            S: userid.toString()
-                        },
-                        ":bid": {
-                            S: boerderyuuid.toString()
-                        }
-                    },
-                    KeyConditionExpression: "userid = :uid AND boerderyuuid = :bid",
-                    TableName: process.env.BoerderyUsersDB
-                };
-                this.dynamodb.query(ddbparams, (err, data) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        if (data.Count > 0) {
-                            let rolle = data.Items[0].rolle;
-                            if (rolle["SS"].length > 0) {
-                                let queryList = [];
-                                for (let rolid of rolle["SS"]) {
-                                    if (rolid.startsWith("t")) {
-                                        queryList.push({ "boerderyuuid": { S: "templaat" }, "rolid": { N: rolid.slice(1).toString() } });
-                                    } else {
-                                        queryList.push({ "boerderyuuid": { S: boerderyuuid.toString() }, "rolid": { N: rolid.toString() } });
-                                    }
-                                };
-                                var params = {
-                                    RequestItems: {
-                                        [process.env.BoerderyRolleDB]: {
-                                            Keys: queryList,
-                                            ProjectionExpression: `bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`
-                                        }
-                                    }
-                                };
-                                this.dynamodb.batchGetItem(params, function(err, data) {
-                                    if (err) {
-                                        reject(err);
-                                    } else {
-                                        try {
-                                            let toelatings = data.Responses[process.env.BoerderyRolleDB].map(rekord => {
-                                                if (rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`]) {
-                                                    return rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`].N;
-                                                } else {
-                                                    return 0;
-                                                }
-                                            });
-                                            let bitmaskresult = toelatings.reduce(function(a, b) {
-                                                return a | b;
-                                            });
-                                            // console.log("toelatings", toelatings, "bitmask", parseInt(bitmask, 10), "bitmaskresult", bitmaskresult);
-                                            // console.log("results", ((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult))));
-                                            resolve((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult)));
-                                        } catch (error) {
-                                            reject(error);
-                                        }
-                                    }
-                                });
-                            } else {
-                                resolve(false); // Het nie toegang nie
-                            }
-                        } else {
-                            resolve(false); // Het nie toegang nie
-                        }
-                    }
-                });
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    IsSPGeldig(userid, spuuid, bittoelatingsblok, bitmask) {
-        return new Promise((resolve, reject) => {
-            try {
-                if (typeof userid === 'undefined' || !userid) {
-                    reject(new BSUserUnknown('Geen gebruiker identifikasie. Probeer weer inteken.'));
-                }
-                if (typeof spuuid === 'undefined' || !spuuid) {
-                    reject(new BSSPUnspecified('Geen diensverskaffer identifikasie gespesifiseer.'));
-                }
-                if (typeof bittoelatingsblok === 'undefined' || bittoelatingsblok === null) {
-                    reject(new BSBittoelatingsBlokUnspecified('Geen bittoelatingsblok is gespesifiseer.'));
-                }
-                if (typeof bitmask === 'undefined' || bitmask === null) {
-                    reject(new BSBitmaskUnspecified('Geen bitmask is gespesifiseer.'));
-                }
-
-                let ddbparams = {
-                    ExpressionAttributeValues: {
-                        ":uid": {
-                            S: userid.toString()
-                        },
-                        ":bid": {
-                            S: spuuid.toString()
-                        }
-                    },
-                    KeyConditionExpression: "userid = :uid AND spuuid = :bid",
-                    TableName: process.env.SPUsersDB
-                };
-                this.dynamodb.query(ddbparams, (err, data) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        if (data.Count > 0) {
-                            let rolle = data.Items[0].rolle;
-                            if (rolle["SS"].length > 0) {
-                                let queryList = [];
-                                for (let rolid of rolle["SS"]) {
-                                    if (rolid.startsWith("t")) {
-                                        queryList.push({ "spuuid": { S: "templaat" }, "rolid": { S: rolid.slice(1).toString() } });
-                                    } else {
-                                        queryList.push({ "spuuid": { S: spuuid.toString() }, "rolid": { S: rolid.toString() } });
-                                    }
-                                };
-                                var params = {
-                                    RequestItems: {
-                                        [process.env.SPRolleDB]: {
-                                            Keys: queryList,
-                                            ProjectionExpression: `bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`
-                                        }
-                                    }
-                                };
-                                this.dynamodb.batchGetItem(params, function(err, data) {
-                                    if (err) {
-                                        reject(err);
-                                    } else {
-                                        try {
-                                            let toelatings = data.Responses[process.env.SPRolleDB].map(rekord => {
-                                                if (rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`]) {
-                                                    return rekord[`bittoelatings_${String.fromCharCode('a'.charCodeAt(0) + parseInt(bittoelatingsblok, 10))}`].N;
-                                                } else {
-                                                    return 0;
-                                                }
-                                            });
-                                            let bitmaskresult = toelatings.reduce(function(a, b) {
-                                                return a | b;
-                                            });
-                                            // console.log("toelatings", toelatings, "bitmask", parseInt(bitmask, 10), "bitmaskresult", bitmaskresult);
-                                            // console.log("results", ((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult))));
-                                            resolve((parseInt(bitmask, 10) == (parseInt(bitmask, 10) & bitmaskresult)));
-                                        } catch (error) {
-                                            reject(error);
-                                        }
-                                    }
-                                });
-                            } else {
-                                resolve(false); // Het nie toegang nie
-                            }
-                        } else {
-                            resolve(false); // Het nie toegang nie
-                        }
-                    }
-                });
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    KryToelatings(boerderyuuid, gebruikernaam, module) {
-        return new Promise((resolve, reject) => {
-            try {
-                let ddbparams = {
-                    ExpressionAttributeValues: {
-                        ":bid": {
-                            S: boerderyuuid.toString()
-                        },
-                        ":uid": {
-                            S: gebruikernaam.toString()
-                        },
-                        ":mid": {
-                            S: module.toString()
-                        }
-                    },
-                    ExpressionAttributeNames: {
-                        "#sk": "gebruikernaam-module-weergawe",
-                        '#mid': 'module'
-                    },
-                    FilterExpression: "#mid = :mid",
-                    KeyConditionExpression: "boerderyuuid = :bid AND begins_with(#sk, :uid)",
-                    TableName: process.env.ModuleToelatingsDB,
-                    ProjectionExpression: "boerderyuuid, toelatings, weergawe"
-                };
-
-                // console.log(JSON.stringify(ddbparams));
-                this.dynamodb.query(ddbparams, (err, data) => {
-                    if (err) {
-                        console.error(err);
-                        reject(err);
-                    } else {
-                        if (data.Count > 0) {
-                            this.dataTransformer.ConvertDynamoDBData(data.Items).then(results => {
-                                let finalresult = results.map(item => {
-                                    let newData = {...item };
-                                    delete newData.boerderyuuid;
-                                    return newData;
-                                });
-                                let biggest = Math.max.apply(Math, finalresult.map(item => parseInt(item.weergawe, 10)));
-                                finalresult = finalresult.filter(item => parseInt(item.weergawe, 10) === biggest);
-                                resolve(finalresult[0].toelatings);
-                            }).catch(error => {
-                                console.error(error);
-                                reject(error);
-                            });
-                        } else {
-                            resolve(false);
-                        }
-                    }
-                });
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    ModuleToelatings(boerderyuuid, gebruikernaam, module, toelatingbenodig) {
-        return new Promise((resolve, reject) => {
-            try {
-                this.KryToelatings(boerderyuuid, gebruikernaam, module).then(results => {
-                    const permissionsowned = JSON.parse(results);
-                    if (permissionsowned) {
-                        let allowed = false;
-                        const permissionAfdeling = toelatingbenodig.substr(
-                            0,
-                            toelatingbenodig.indexOf(":")
-                        );
-                        const requiredPermissions = toelatingbenodig.substr(
-                            toelatingbenodig.indexOf(":") + 1,
-                            toelatingbenodig.length + 1
-                        );
-                        if (permissionsowned[permissionAfdeling][requiredPermissions] === true) {
-                            allowed = true;
-                        } else if (
-                            permissionsowned[permissionAfdeling][requiredPermissions] === false
-                        ) {
-                            allowed = false;
-                        } else {
-                            allowed = permissionsowned[permissionAfdeling][requiredPermissions];
-                        }
-
-                        resolve(allowed);
-                    } else {
-                        resolve(false);
-                    }
-                }).catch(error => {
-                    console.error(error);
-                    reject(error);
-                })
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-}
-
 class Logger {
 
-    constructor(dynamodb, boerderyuuid, gebruikernaam, httpMethod, path) {
+    constructor(dynamodb, boerderyuuid, gebruikernaam, httpMethod, path, spuuid) {
         this.dynamodb = dynamodb;
         this.boerderyuuid = boerderyuuid;
         this.gebruikernaam = gebruikernaam;
         this.httpMethod = httpMethod;
         this.path = path;
+        this.spuuid = spuuid;
     }
 
     LogTransaksie(hoofafdeling, afdeling, beskrywing, request, params, body, result, itemdata) {
@@ -306,9 +18,6 @@ class Logger {
             try {
                 let ddbparams = {
                     Item: {
-                        "boerderyuuid": {
-                            S: this.boerderyuuid.toString()
-                        },
                         "datumtyd": {
                             N: moment.utc().unix().toString()
                         },
@@ -330,6 +39,21 @@ class Logger {
                     },
                     TableName: process.env.TransaksieLogDB
                 };
+                if (this.spuuid == null) {
+                    ddbparams.Item = {
+                        ...ddbparams.Item,
+                        "boerderyuuid": {
+                            S: this.boerderyuuid.toString()
+                        }
+                    }
+                } else {
+                    ddbparams.Item = {
+                        ...ddbparams.Item,
+                        "spuuid": {
+                            S: this.spuuid.toString()
+                        }
+                    }
+                }
                 if (this.path != null) {
                     ddbparams.Item = {
                         ...ddbparams.Item,
@@ -672,11 +396,5 @@ class DataTransformer {
     }
 }
 
-exports.BSHelper = BSHelper;
 exports.Logger = Logger;
 exports.DataTransformer = DataTransformer;
-
-exports.BSUserUnknown = BSUserUnknown;
-exports.BSBoerderyUnspecified = BSBoerderyUnspecified;
-exports.BSBittoelatingsBlokUnspecified = BSBittoelatingsBlokUnspecified;
-exports.BSBitmaskUnspecified = BSBitmaskUnspecified;
