@@ -1,10 +1,10 @@
 {
   "name": "@allesbeste/bshelper",
-  "version": "3.3.0",
+  "version": "4.0.1",
   "description": "BS Helper package",
   "main": "bshelper.js",
   "scripts": {
-    "test": "jest"
+    "test": "echo \"Warning: no test specified\" && exit 0"
   },
   "repository": {
     "type": "git",

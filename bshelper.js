@@ -1,3 +1,4 @@
+/* jslint node: true */
 "use strict";
 
 var moment = require('moment');
@@ -139,6 +140,9 @@ class DataTransformer {
                                 value = value[0].map(item => !isNaN(item) && item.toString().indexOf(".") !== -1 ?
                                     parseFloat(item) :
                                     parseInt(item, 10));
+                            }
+                            if (key === "SS") {
+                                value = value[0];
                             }
                             if (key === "L") {
                                 value = await this.ConvertDynamoDBData(value);
