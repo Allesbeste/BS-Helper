@@ -1,3 +1,4 @@
+/* jslint node: true */
 "use strict";
 
 var moment = require('moment');
@@ -140,6 +141,9 @@ class DataTransformer {
                                     parseFloat(item) :
                                     parseInt(item, 10));
                             }
+                            if (key === "SS") {
+                                value = value[0];
+                            }
                             if (key === "L") {
                                 value = await this.ConvertDynamoDBData(value);
                                 let val = [];
@@ -184,7 +188,7 @@ class DataTransformer {
         return new Promise((resolve, reject) => {
             try {
                 var results = data.map((item) => {
-                    item = JSON.parse(item.S);
+                    item = JSON.parse(item);
                     switch (item.type) {
                         case "input":
                             return {
@@ -359,6 +363,22 @@ class DataTransformer {
                                 value: item.value || false,
                                 valid: true,
                                 touched: true
+                            };
+                        case "radio":
+                            return {
+                                name: item.name,
+                                elementType: item.type,
+                                label: item.label,
+                                elementConfig: {
+                                    options: item.options
+                                },
+                                value: item.value || "",
+                                validation: {...item.validations },
+                                valid: item.validations.required ?
+                                    item.value ?
+                                    true :
+                                    false : true,
+                                touched: item.value ? true : false
                             };
                         default:
                             return {
