@@ -1,0 +1,10 @@
+# Compound Engineering defaults for this repo. Keys: see the plugin's docs/guides/configuration.md.
+packs:
+  - source: https://github.com/Allesbeste/root-house-rules
+    ref: master
+plan_skip_scoping_confirm: true     # scope confirm was always answered "proceed"
+auto_babysit: false                 # no standing PR watcher; CI is checked once after push
+cross_model_review_mode: auto
+cross_model_peer: codex
+cross_model_model: gpt-6.1-sol
+cross_model_effort: high
